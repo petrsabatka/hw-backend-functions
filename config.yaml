@@ -1,0 +1,12 @@
+metadata_storage:
+  host: sample-bi-datamart.postgres.database.azure.com
+  port: 5432
+  user: backend_client
+  db_name: sample_metadata_storage
+  schema: public
+
+gooddata:
+  host: https://sample.internal.cloud.gooddata.com/
+
+dataproduct_repository:
+  container_name: sample-dataproduct-repository
