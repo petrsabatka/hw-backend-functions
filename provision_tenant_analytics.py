@@ -8,7 +8,7 @@ from libs.gooddata import (
         get_sdk, create_or_update_data_source, create_or_update_workspace,
         put_declarative_pdm, put_declarative_ldm, put_declarative_am
 )
-from libs.metadata_storage import MetadataStorage
+from libs.metadata_storage import MetadataStorage, metadata_storage_logger
 from libs.dataproduct_repository import DataproductRepository
 from pathlib import Path
 from dotenv import load_dotenv
@@ -36,20 +36,24 @@ class ProvisionTenant:
         args = parser.parse_args()
         return args
 
-    def create_datasource(self) -> str:        
+    @metadata_storage_logger
+    def create_datasource(self) -> str:
         create_or_update_data_source(self.sdk, self.logger, config=self.metadata.datasource)
         return self.metadata.datasource.id
 
+    @metadata_storage_logger
     def create_empty_parent(self) -> str:
         id = PARENT_WORKSPACE_ID_TMPL.format(data_product_id=self.args.dataproduct, tenant_id=self.args.tenant)
         create_or_update_workspace(self.sdk, self.logger, id=id, name=id)
         return id
 
+    @metadata_storage_logger
     def create_empty_child(self, parent_id: str) -> str:
         id = CHILD_WORKSPACE_ID_TMPL.format(data_product_id=self.args.dataproduct, tenant_id=self.args.tenant)
         create_or_update_workspace(self.sdk, self.logger, id=id, name=id, parent_id=parent_id)
         return id
     
+    @metadata_storage_logger
     def get_metadata(self) -> None:
         self.metadata = SimpleNamespace()        
         datasource_id = DATASOURCE_ID_TMPL.format(data_product_id=self.args.dataproduct)
@@ -57,9 +61,11 @@ class ProvisionTenant:
         self.metadata.dataproduct = self.metadata_storage.get_dataproduct_metadata()
         self.metadata.tenant = self.metadata_storage.get_tenant_metadata()
 
+    @metadata_storage_logger
     def get_dataproduct(self) -> None:        
         self.dataproduct_repository.get_declarative_dataproduct(self.metadata.dataproduct.storage_path)
 
+    @metadata_storage_logger
     def deploy_dataproduct(self, datasource_id:str, workspace_id: str) -> None:
         src_dir = Path(DECLARATIVE_DATAPRODUCT_PATH)
         put_declarative_pdm(self.sdk, self.logger, src_dir, datasource_id)
@@ -77,11 +83,9 @@ class ProvisionTenant:
             self.deploy_dataproduct(datasource_id, workspace_id=parent_id)
         except Exception as ex:
             traceback = get_traceback(ex)
-            self.metadata_storage.execution_log(traceback)
             self.logger.error(traceback)
             print(f"The execution failed (exeption={ex.__class__.__name__}, rollback_required={self.if_error_rollback_required})")
         else:
-            self.metadata_storage.execution_log('ok')
             print("The execution finished successfully")
 
 if __name__ == "__main__":

@@ -4,9 +4,11 @@ from typing import Any, Dict
 from logging import Logger
 from libs.postgres import Postgres
 from libs.exceptions import NotFoundInMetadataStorageError
+from libs.logger import get_traceback
 from types import SimpleNamespace
 from pathlib import Path
-import os
+import os, time
+import functools
 
 class MetadataStorage:
     def __init__(self, logger: Logger, args: Any, config: Dict, scenario_type: str ):
@@ -15,6 +17,7 @@ class MetadataStorage:
         self.config = SimpleNamespace(**config)
         self.scenario_type = scenario_type
         self._db = self._get_db()
+        self.step_uuid = time.time()
 
     def _get_db(self) -> Postgres:
         masked_config = {k:v for k,v in self.config.__dict__.items() if k != 'password'}
@@ -62,9 +65,24 @@ class MetadataStorage:
                WHERE id = '{}'""".format(self.args.tenant)
         return self._get_metadata(sql, entity='tenant')
     
-    def execution_log(self, result: str):
+    def execution_log(self, scenario_task:str, result: str):
         sql = """        
-              INSERT INTO execution_log (scenario_type, process_step_id, execution_timestamp, tenant_id, result) 
-                   VALUES (%s, 'step_uuid', now(), %s, %s)"""
-        params = (self.scenario_type, self.args.tenant, result)
+              INSERT INTO execution_log (scenario_type, scenario_task, process_step_id, execution_timestamp, tenant_id, result) 
+                   VALUES (%s, %s, %s, now(), %s, %s)"""
+        params = (self.scenario_type, scenario_task, self.step_uuid, self.args.tenant, result)
         self._db.execute_param_query(sql, params)
+
+def metadata_storage_logger(func):
+    @functools.wraps(func)
+    def wrapper_metadata_storage_log(self, *args, **kwargs):
+        try:
+            value = func(self, *args, **kwargs)
+        except Exception as ex:
+            traceback = get_traceback(ex)
+            self.metadata_storage.execution_log(scenario_task=func.__name__, result=traceback)
+            raise ex
+        else:
+            self.metadata_storage.execution_log(scenario_task=func.__name__, result='ok')
+
+        return value
+    return wrapper_metadata_storage_log
