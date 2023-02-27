@@ -1,6 +1,6 @@
 from logging import Logger
 from pathlib import Path
-from typing import Any, Optional, Dict
+from typing import Any, Optional, Dict, List
 from gooddata_sdk import (
         GoodDataSdk, BasicCredentials, CatalogDataSourcePostgres, PostgresAttributes,
         CatalogWorkspace, CatalogUserGroup, CatalogUser
@@ -74,13 +74,36 @@ def create_or_update_user_group(sdk: GoodDataSdk, logger: Logger, user_group_id:
     user_group = CatalogUserGroup.init(user_group_id=user_group_id)
     sdk.catalog_user.create_or_update_user_group(user_group=user_group)
 
-def assign_workspace_permissions(sdk: GoodDataSdk, logger: Logger, data: Dict, workspace_id: str) -> None:
-    logger.info(f"Assigning workspace permissions ({data=})")
-    permissions = CatalogDeclarativeWorkspacePermissions.from_dict(data, camel_case=True)
-    sdk.catalog_permission.put_declarative_permissions(
-        workspace_id=workspace_id, declarative_workspace_permissions=permissions)
+def _build_permission(id: str, type: str, name: str) -> Dict:
+    return {
+              "assignee": {
+                  "id": id,
+                  "type": type
+              },
+              "name": name
+           }
 
-def create_or_update_user(sdk: GoodDataSdk, logger: Logger, config: Any) -> None:    
-    user = CatalogUser.init(user_id=config.user_id, user_group_ids=config.user_group_ids)
+def _build_workspace_permissions(perm: List, hierarchy_perm: List = []) -> Dict:
+    return {
+              "hierarchyPermissions": hierarchy_perm,
+              "permissions": perm
+           }
+
+def assign_workspace_usergoup_permissions(sdk: GoodDataSdk, logger: Logger, workspace_id: str,
+                                          usergroups: Any) -> None:
+    permissions = [_build_permission(id=g.id, type='userGroup', name=g.permission) for g in usergroups]
+    workspace_perm =  _build_workspace_permissions(perm=permissions)
+    logger.info(f"Assigning workspace permissions ({workspace_id=}, {workspace_perm=})")
+    catalog_perm = CatalogDeclarativeWorkspacePermissions.from_dict(workspace_perm, camel_case=True)
+    sdk.catalog_permission.put_declarative_permissions(
+        workspace_id=workspace_id, declarative_workspace_permissions=catalog_perm)
+
+def create_or_update_user(sdk: GoodDataSdk, logger: Logger, config: Any) -> None:
+    user_exist  = next((u for u in sdk.catalog_user.list_users() if u.id == config.user_id), None)
+    if user_exist:
+        user_group_ids = list(set(user_exist.get_user_groups + config.user_group_ids))
+    else:
+        user_group_ids = config.user_group_ids
+    user = CatalogUser.init(user_id=config.user_id, user_group_ids=user_group_ids)
     logger.info(f"Creating user ({user=})")
     sdk.catalog_user.create_or_update_user(user=user)

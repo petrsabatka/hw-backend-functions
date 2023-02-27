@@ -1,7 +1,7 @@
-from libs.azure_blob_storage import DirectoryClient
+from shared_code.azure_blob_storage import DirectoryClient
 from logging import Logger
 from typing import Dict
-from config import DECLARATIVE_DATAPRODUCT_PATH
+from shared_code import app_config
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -21,7 +21,7 @@ class DataproductRepository:
         return DirectoryClient(self.config.connection_string, self.config.container_name)
 
     def get_declarative_dataproduct(self, storage_path: str) -> None:
-        dest = Path(DECLARATIVE_DATAPRODUCT_PATH)
+        dest = Path(app_config.DECLARATIVE_DATAPRODUCT_PATH)
         if dest.exists():
             self.logger.info(f"Deleting dataproduct stage ({dest=})")
             shutil.rmtree(dest)        

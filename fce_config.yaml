@@ -1,0 +1,14 @@
+---
+default_usergroups:
+  - name: chevron5
+  - name: chevron6
+
+workspace_permissions:
+  - workspace: child
+    usergroups:
+      - usergroup: chevron5
+        permission: MANAGE
+      - usergroup: chevron6
+        permission: VIEW
+
+default_usergroup_for_default_users: chevron5
