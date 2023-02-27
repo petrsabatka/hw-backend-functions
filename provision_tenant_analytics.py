@@ -1,12 +1,13 @@
 from libs.logger import get_logger, get_traceback
 from config import (
         Config, DATASOURCE_ID_TMPL, PARENT_WORKSPACE_ID_TMPL, CHILD_WORKSPACE_ID_TMPL,
-        DECLARATIVE_DATAPRODUCT_PATH, CREATE_TENANT_SCENARIO
+        DECLARATIVE_DATAPRODUCT_PATH, CREATE_TENANT_SCENARIO, USERGROUP_ID_TMPL
 )
 from args import provision_tenant_args
 from libs.gooddata import (
         get_sdk, create_or_update_data_source, create_or_update_workspace,
-        put_declarative_pdm, put_declarative_ldm, put_declarative_am
+        put_declarative_pdm, put_declarative_ldm, put_declarative_am, create_or_update_user_group,
+        assign_workspace_permissions, create_or_update_user
 )
 from libs.metadata_storage import MetadataStorage, metadata_storage_logger
 from libs.dataproduct_repository import DataproductRepository
@@ -56,7 +57,7 @@ class ProvisionTenant:
     @metadata_storage_logger
     def get_metadata(self) -> None:
         self.metadata = SimpleNamespace()        
-        datasource_id = DATASOURCE_ID_TMPL.format(data_product_id=self.args.dataproduct)
+        datasource_id = DATASOURCE_ID_TMPL.format(data_product_id=self.args.dataproduct, tenant_id=self.args.tenant)
         self.metadata.datasource = self.metadata_storage.get_datasource_metadata(datasource_id)
         self.metadata.dataproduct = self.metadata_storage.get_dataproduct_metadata()
         self.metadata.tenant = self.metadata_storage.get_tenant_metadata()
@@ -72,6 +73,45 @@ class ProvisionTenant:
         put_declarative_ldm(self.sdk, self.logger, src_dir, workspace_id, datasource_id)
         put_declarative_am(self.sdk, self.logger, src_dir, workspace_id)
 
+    @metadata_storage_logger
+    def create_user_groups(self) -> None:
+        usergroups = ['chevron5','chevron6']
+        for usergroup in usergroups:
+            user_group_id = USERGROUP_ID_TMPL.format(tenant_id=self.args.tenant, usergroup=usergroup)
+            create_or_update_user_group(self.sdk, self.logger, user_group_id=user_group_id)
+
+    def _get_workspace_permissions_asignee(self, usergroup: str, name: str):
+        assignee = {
+            "assignee": {
+                "id": USERGROUP_ID_TMPL.format(tenant_id=self.args.tenant, usergroup=usergroup),
+                "type": "userGroup"
+            },
+            "name": name
+        } 
+        return assignee
+
+    @metadata_storage_logger
+    def assign_workspace_permissions(self, workspace_id: str) -> None:
+        chevron6 =  self._get_workspace_permissions_asignee(usergroup='chevron6', name='VIEW')
+        chevron5 =  self._get_workspace_permissions_asignee(usergroup='chevron5', name='MANAGE')
+        data = {"hierarchyPermissions": [], "permissions": [chevron6, chevron5]}
+        assign_workspace_permissions(self.sdk, self.logger, data, workspace_id)
+
+    @metadata_storage_logger
+    def provision_default_users(self) -> None:
+        chevron5_user_group = USERGROUP_ID_TMPL.format(tenant_id=self.args.tenant, usergroup='chevron5')
+        user_group_ids = [chevron5_user_group]
+
+        tenant_owner = SimpleNamespace()
+        tenant_owner.user_id = f"tenant.owner.{self.args.tenant}.com"
+        tenant_owner.user_group_ids = user_group_ids
+        create_or_update_user(self.sdk, self.logger, config=tenant_owner)
+
+        global_admin = SimpleNamespace()
+        global_admin.user_id = 'global.admin.honeywell.com'
+        global_admin.user_group_ids = user_group_ids
+        create_or_update_user(self.sdk, self.logger, config=global_admin)
+
     def main(self):
         try:
             self.get_metadata()
@@ -79,8 +119,11 @@ class ProvisionTenant:
             self.if_error_rollback_required = True
             datasource_id = self.create_datasource()
             parent_id = self.create_empty_parent()
-            self.create_empty_child(parent_id)
+            child_id = self.create_empty_child(parent_id)
             self.deploy_dataproduct(datasource_id, workspace_id=parent_id)
+            self.create_user_groups()
+            self.assign_workspace_permissions(child_id)
+            self.provision_default_users()
         except Exception as ex:
             traceback = get_traceback(ex)
             self.logger.error(traceback)

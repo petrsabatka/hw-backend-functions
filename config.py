@@ -7,11 +7,14 @@ WRK_FOLDER = "tmp"
 DOWNLOAD_FOLDER = WRK_FOLDER + "/downloads"
 DECLARATIVE_DATAPRODUCT_PATH = DOWNLOAD_FOLDER + "/dataproduct"
 
-DATASOURCE_ID_TMPL = "{data_product_id}"
+CREATE_TENANT_SCENARIO = "CreateTenant"
+
+DATASOURCE_ID_TMPL = "{data_product_id}_{tenant_id}"
 PARENT_WORKSPACE_ID_TMPL = "{data_product_id}_{tenant_id}_parent"
 CHILD_WORKSPACE_ID_TMPL = "{data_product_id}_{tenant_id}_child"
 
-CREATE_TENANT_SCENARIO = "CreateTenant"
+USERGROUP_ID_TMPL = "{tenant_id}_{usergroup}"
+
 
 class Config:
     def __init__(self, config_file: str):

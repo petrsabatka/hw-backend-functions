@@ -1,10 +1,11 @@
 from logging import Logger
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Dict
 from gooddata_sdk import (
-        GoodDataSdk, BasicCredentials, CatalogDataSourcePostgres,
-        PostgresAttributes, CatalogWorkspace
+        GoodDataSdk, BasicCredentials, CatalogDataSourcePostgres, PostgresAttributes,
+        CatalogWorkspace, CatalogUserGroup, CatalogUser
 )
+from gooddata_sdk.catalog.permission.declarative_model.permission import CatalogDeclarativeWorkspacePermissions
 
 def get_sdk(host: str, token: str, logger: Logger) -> GoodDataSdk:
     masked_token = f"{len(token[:-4])*'#'}{token[-4:]}"
@@ -67,3 +68,19 @@ def put_declarative_am(sdk: GoodDataSdk, logger: Logger, src_dir: Path, workspac
     logger.info(f"Putting am  (tgt_ws={workspace_id}, {src_dir=})")
     am = sdk.catalog_workspace_content.load_analytics_model_from_disk(path=src_dir)
     sdk.catalog_workspace_content.put_declarative_analytics_model(workspace_id=workspace_id, analytics_model=am)
+
+def create_or_update_user_group(sdk: GoodDataSdk, logger: Logger, user_group_id: str) -> None:
+    logger.info(f"Creating user group ({user_group_id=})")    
+    user_group = CatalogUserGroup.init(user_group_id=user_group_id)
+    sdk.catalog_user.create_or_update_user_group(user_group=user_group)
+
+def assign_workspace_permissions(sdk: GoodDataSdk, logger: Logger, data: Dict, workspace_id: str) -> None:
+    logger.info(f"Assigning workspace permissions ({data=})")
+    permissions = CatalogDeclarativeWorkspacePermissions.from_dict(data, camel_case=True)
+    sdk.catalog_permission.put_declarative_permissions(
+        workspace_id=workspace_id, declarative_workspace_permissions=permissions)
+
+def create_or_update_user(sdk: GoodDataSdk, logger: Logger, config: Any) -> None:    
+    user = CatalogUser.init(user_id=config.user_id, user_group_ids=config.user_group_ids)
+    logger.info(f"Creating user ({user=})")
+    sdk.catalog_user.create_or_update_user(user=user)
