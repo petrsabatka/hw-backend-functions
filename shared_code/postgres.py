@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from logging import Logger
-from typing import Any
 from pathlib import Path
+from typing import Any
+
 import psycopg2
+from psycopg2 import errorcodes, errors
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
-from psycopg2 import errors, errorcodes
 
 
 class Postgres:
@@ -63,5 +64,5 @@ class Postgres:
         stmt = f"""
             COPY {table_name} FROM STDIN CSV QUOTE e'\\x01' DELIMITER e'\\x02'
         """
-        with open(file) as fp:
-            self._cur.copy_expert(stmt, fp)
+        with open(file, encoding="utf-8") as fle:
+            self._cur.copy_expert(stmt, fle)

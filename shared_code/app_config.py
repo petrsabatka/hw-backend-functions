@@ -1,52 +1,81 @@
-from pathlib import Path
-from typing import Dict
 import os
-import yaml
-
-WRK_FOLDER = "tmp"
-DOWNLOAD_FOLDER = WRK_FOLDER + "/downloads"
-DECLARATIVE_DATAPRODUCT_PATH = DOWNLOAD_FOLDER + "/dataproduct"
+from types import SimpleNamespace
+from typing import Dict
 
 DATASOURCE_ID_TMPL = "{data_product_id}_{tenant_id}"
 PARENT_WORKSPACE_ID_TMPL = "{data_product_id}_{tenant_id}_parent"
 CHILD_WORKSPACE_ID_TMPL = "{data_product_id}_{tenant_id}_child"
 USERGROUP_ID_TMPL = "{data_product_id}_{tenant_id}_{usergroup}"
 
-def get_child_workspace_id (data_product_id: str, tenant_id: str) -> str:
-    return CHILD_WORKSPACE_ID_TMPL.format(data_product_id=data_product_id, tenant_id=tenant_id)
+REQUIRED_ENVIRON_METADATA_STORAGE = {
+    'metadata_storage_host': 'host',
+    'metadata_storage_port': 'port',
+    'metadata_storage_user': 'user',
+    'metadata_storage_db_name': 'db_name',
+    'metadata_storage_schema': 'schema',
+    'metadata_storage_password': 'password'
+}
+REQUIRED_ENVIRON_GOODDATA = {
+    'gooddata_host': 'host',
+    'gooddata_token': 'token'
+}
+REQUIRED_ENVIRON_DATAPRODUCT_REPOSITORY = {
+    'dataproduct_repository_container_name': 'container_name',
+    'dataproduct_repository_connection_string': 'connection_string'
+}
 
-def get_parent_workspace_id (data_product_id: str, tenant_id: str) -> str:
-    return PARENT_WORKSPACE_ID_TMPL.format(data_product_id=data_product_id, tenant_id=tenant_id)
+def get_child_workspace_id(data_product_id: str, tenant_id: str) -> str:
+    return CHILD_WORKSPACE_ID_TMPL.format(
+        data_product_id=data_product_id,
+        tenant_id=tenant_id
+    )
 
-def get_datasource_id (data_product_id: str, tenant_id: str) -> str:
-    return DATASOURCE_ID_TMPL.format(data_product_id=data_product_id, tenant_id=tenant_id)
+def get_parent_workspace_id(data_product_id: str, tenant_id: str) -> str:
+    return PARENT_WORKSPACE_ID_TMPL.format(
+        data_product_id=data_product_id,
+        tenant_id=tenant_id
+    )
 
-def get_usergroup_id (data_product_id: str, tenant_id: str, usergroup: str) -> str:
-    return USERGROUP_ID_TMPL.format(data_product_id=data_product_id, tenant_id=tenant_id,usergroup=usergroup)
+def get_datasource_id(data_product_id: str, tenant_id: str) -> str:
+    return DATASOURCE_ID_TMPL.format(
+        data_product_id=data_product_id,
+        tenant_id=tenant_id
+    )
 
-class Config:
-    def __init__(self, config_file: str = 'shared_code/app_config.yaml'):
-        self.config_file = Path(config_file)
+def get_usergroup_id(data_product_id: str, tenant_id: str, usergroup: str) -> str:
+    return USERGROUP_ID_TMPL.format(
+        data_product_id=data_product_id,
+        tenant_id=tenant_id,usergroup=usergroup
+    )
 
-    @property
-    def config(self) -> Dict:
-        with open(Path(self.config_file)) as fp:
-            return yaml.safe_load(fp)
+def get_environ_in_local_names(translatin_map: Dict) -> SimpleNamespace:
+    local_environ = {}
+    for external_name, internal_name in translatin_map.items():
+        local_environ[internal_name] = os.getenv(external_name)
+    return SimpleNamespace(**local_environ)
 
-    @property
-    def metadata_storage(self) -> Dict:
-        metadata_storage = self.config['metadata_storage']
-        metadata_storage['password'] = os.getenv('metadata_storage_password')
-        return metadata_storage
+def get_metadata_storage_config(tenant: str, scenario: str, logger) -> SimpleNamespace:
+    cnf = SimpleNamespace()
+    cnf.db_config = get_environ_in_local_names(REQUIRED_ENVIRON_METADATA_STORAGE)
+    public_params = ['host','port','user','db_name','schema']
+    cnf.db_config_masked =  {k:v for k,v in cnf.db_config.__dict__.items() if k in public_params}
+    cnf.tenant = tenant
+    cnf.scenario = scenario
+    cnf.logger = logger
+    return cnf
 
-    @property
-    def gooddata(self) -> Dict:
-        gooddata = self.config['gooddata']
-        gooddata['token'] = os.getenv('gooddata_token')
-        return gooddata
-    
-    @property
-    def dataproduct_repository(self) -> Dict:
-        dataproduct_repository = self.config['dataproduct_repository']
-        dataproduct_repository['connection_string'] = os.getenv('azure_storage_connection_string')
-        return dataproduct_repository
+def get_gooddata_config(logger) -> SimpleNamespace:
+    cnf = SimpleNamespace()
+    cnf.config = get_environ_in_local_names(REQUIRED_ENVIRON_GOODDATA)
+    public_params = ['host']
+    cnf.config_masked =  {k:v for k,v in cnf.config.__dict__.items() if k in public_params}
+    cnf.logger = logger
+    return cnf
+
+def get_dataproduct_repository_config(logger) -> SimpleNamespace:
+    cnf = SimpleNamespace()
+    cnf.config = get_environ_in_local_names(REQUIRED_ENVIRON_DATAPRODUCT_REPOSITORY)
+    public_params = ['container_name']
+    cnf.config_masked =  {k:v for k,v in cnf.config.__dict__.items() if k in public_params}
+    cnf.logger = logger
+    return cnf

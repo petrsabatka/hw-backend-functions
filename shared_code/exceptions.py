@@ -3,3 +3,6 @@ class NotFoundInMetadataStorageError(Exception):
 
 class UnknownWorkspaceTypeError(Exception):
     """Unknown Workspace Type"""
+
+class MissingEnvironmentVariablesError(Exception):
+    """Missing Environment Variables Detected"""
